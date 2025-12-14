@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>ウパ迷路オンライン</title>
+<style>
+html,body{margin:0;height:100%;background:#222;overflow:hidden;font-family:sans-serif}
+#wrap{height:100%;display:flex;flex-direction:column}
+#game{flex:1;display:flex;justify-content:center;align-items:center}
+canvas{background:#fff;touch-action:none}
+#footer{
+  height:180px;background:#111;color:#fff;
+  display:flex;align-items:center;justify-content:space-around
+}
+.ctrl{
+  display:grid;
+  grid-template-columns:80px 80px 80px;
+  grid-template-rows:80px 80px;
+  gap:10px
+}
+button{
+  font-size:32px;border:none;border-radius:16px;
+  background:#444;color:#fff
+}
+#compass{
+  width:90px;height:90px;border:3px solid #fff;border-radius:50%;position:relative
+}
+#needle{
+  position:absolute;left:50%;top:50%;
+  width:5px;height:40px;background:red;
+  transform-origin:bottom center
+}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="game">
+    <canvas id="cv"></canvas>
+  </div>
+  <div id="footer">
+    <div class="ctrl">
+      <div></div><button id="up">↑</button><div></div>
+      <button id="left">←</button><button id="down">↓</button><button id="right">→</button>
+    </div>
+    <div id="compass"><div id="needle"></div></div>
+  </div>
+</div>
+
+<script>
+/* ===== 迷路（PC版と同仕様） ===== */
+const W=61,H=61;
+const maze=Array.from({length:H},()=>Array(W).fill(1));
+function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}}
+function carve(x,y){const d=[[2,0],[-2,0],[0,2],[0,-2]];shuffle(d);for(const[dx,dy]of d){const nx=x+dx,ny=y+dy;if(ny>0&&ny<H-1&&nx>0&&nx<W-1&&maze[ny][nx]){maze[ny][nx]=0;maze[y+dy/2][x+dx/2]=0;carve(nx,ny)}}}
+maze[1][1]=0;carve(1,1);
+const goal={x:W-2,y:H-2};maze[goal.y][goal.x]=0;
+
+/* ===== 描画 ===== */
+const cv=document.getElementById('cv');
+const ctx=cv.getContext('2d');
+function resize(){cv.width=innerWidth;cv.height=innerHeight-180}
+addEventListener('resize',resize);resize();
+
+const TILE=28;
+let px=1,py=1;
+
+function draw(){
+  ctx.clearRect(0,0,cv.width,cv.height);
+  const ox=cv.width/2-px*TILE-TILE/2;
+  const oy=cv.height/2-py*TILE-TILE/2;
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++)if(maze[y][x]){
+    ctx.fillStyle='#000';ctx.fillRect(x*TILE+ox,y*TILE+oy,TILE,TILE);
+  }
+  ctx.fillStyle='gold';ctx.fillRect(goal.x*TILE+ox,goal.y*TILE+oy,TILE,TILE);
+  ctx.fillStyle='red';ctx.beginPath();ctx.arc(px*TILE+ox+TILE/2,py*TILE+oy+TILE/2,10,0,Math.PI*2);ctx.fill();
+  const dx=goal.x-px,dy=goal.y-py;const ang=Math.atan2(dy,dx)+Math.PI/2;
+  document.getElementById('needle').style.transform=`translate(-50%,-100%) rotate(${ang}rad)`;
+}
+
+function move(dx,dy){const nx=px+dx,ny=py+dy;if(maze[ny]&&maze[ny][nx]===0){px=nx;py=ny;if(px===goal.x&&py===goal.y){alert('GOAL!!');px=1;py=1;}draw();}}
+
+/* ===== タッチ操作（押しっぱなし対応） ===== */
+let timer=null;
+function bind(btn,dx,dy){
+  btn.addEventListener('touchstart',e=>{e.preventDefault();move(dx,dy);timer=setInterval(()=>move(dx,dy),120)});
+  btn.addEventListener('touchend',()=>clearInterval(timer));
+  btn.addEventListener('touchcancel',()=>clearInterval(timer));
+}
+bind(up,0,-1);bind(down,0,1);bind(left,-1,0);bind(right,1,0);
+
+draw();
+</script>
+</body>
+</html>
