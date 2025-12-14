@@ -6,126 +6,159 @@
 <title>ウパ迷路オンライン</title>
 <style>
 body{margin:0;background:#111;color:#fff;font-family:sans-serif;touch-action:none}
-#title{padding:6px;text-align:center;font-weight:bold}
+#title{text-align:center;padding:6px;font-weight:bold}
 canvas{display:block;margin:0 auto;background:#000}
-#ui{display:flex;flex-direction:column;gap:6px;padding:8px}
+#ui{padding:8px;display:flex;flex-direction:column;gap:8px}
 #ctrl{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}
-button{padding:10px;font-size:16px;border-radius:8px;border:none}
-#opts{display:flex;gap:6px}
+button{padding:12px;font-size:16px;border-radius:8px;border:none}
+#opts{display:flex;gap:6px;flex-wrap:wrap}
+#info{display:flex;justify-content:space-between;font-size:14px}
 </style>
 </head>
 <body>
+
 <div id="title">ウパ迷路オンライン</div>
 <canvas id="cv"></canvas>
+
 <div id="ui">
   <div id="ctrl">
     <div></div><button id="up">↑</button><div></div>
     <button id="left">←</button><button id="down">↓</button><button id="right">→</button>
   </div>
-  <div id="opts">
-  <select id="difficulty">
-    <option value="easy">かんたん</option>
-    <option value="normal" selected>ふつう</option>
-    <option value="hard">むずかしい</option>
-    <option value="extreme">げきむず</option>
-  </select>
-  <button id="regen">迷路を再生成</button>
-  <span id="goalCount">GOAL: 0</span>
-</div>
-</div>
-<script>
-const cv=document.getElementById('cv');
-const ctx=cv.getContext('2d');
-let W,H,scale=32;
-function resize(){
-  W=Math.floor(innerWidth/scale);
-  H=Math.floor((innerHeight-220)/scale);
-  if(W%2===0)W--;if(H%2===0)H--;
-  cv.width=W*scale;cv.height=H*scale;
-}
-resize();addEventListener('resize',resize);
-let maze,px,py,goal;
-let goalCount=0;
-const goalSE=new Audio('goal.mp3');
-let timer=null;
-function stopMove(){if(timer){clearInterval(timer);timer=null;}}
-function genMaze(){
-  const diff=document.getElementById('difficulty').value;
-  let complexity=1;
-  if(diff==='normal')complexity=2;
-  if(diff==='hard')complexity=4;
-  if(diff==='extreme')complexity=8;
 
-  maze=Array.from({length:H},()=>Array(W).fill(1));
-  function dig(x,y){maze[y][x]=0;
-    const dirs=[[2,0],[-2,0],[0,2],[0,-2]];
-    for(let i=0;i<complexity;i++)dirs.sort(()=>Math.random()-0.5);
-    for(const [dx,dy] of dirs){const nx=x+dx,ny=y+dy;
-      if(ny>0&&ny<H-1&&nx>0&&nx<W-1&&maze[ny][nx]){
-        maze[y+dy/2][x+dx/2]=0;dig(nx,ny);
-      }}
+  <div id="opts">
+    <select id="level">
+      <option value="easy">かんたん</option>
+      <option value="normal" selected>ふつう</option>
+      <option value="hard">むずかしい</option>
+      <option value="extreme">げきむず</option>
+    </select>
+    <button id="regen">再生成</button>
+  </div>
+
+  <div id="info">
+    <div>GOAL回数：<span id="count">0</span></div>
+  </div>
+</div>
+
+<audio id="se" src="goal.mp3" preload="auto"></audio>
+
+<script>
+const cv = document.getElementById("cv");
+const ctx = cv.getContext("2d");
+
+let TILE = 32;
+let maze=[], W=0, H=0;
+let px=1, py=1;
+let goal={x:0,y:0};
+let timer=null;
+let goalCount=0;
+
+function resize(){
+  const hUI = document.getElementById("ui").offsetHeight + document.getElementById("title").offsetHeight;
+  cv.width = window.innerWidth;
+  cv.height = window.innerHeight - hUI;
+}
+window.addEventListener("resize", resize);
+resize();
+
+function genMaze(level){
+  const sizeMap = {
+    easy: 21,
+    normal: 31,
+    hard: 41,
+    extreme: 61
+  };
+  W = H = sizeMap[level];
+  maze = Array.from({length:H},()=>Array(W).fill(1));
+
+  function dig(x,y){
+    maze[y][x]=0;
+    const d=[[2,0],[-2,0],[0,2],[0,-2]].sort(()=>Math.random()-0.5);
+    for(const [dx,dy] of d){
+      const nx=x+dx, ny=y+dy;
+      if(nx>0&&ny>0&&nx<W-1&&ny<H-1&&maze[ny][nx]){
+        maze[y+dy/2][x+dx/2]=0;
+        dig(nx,ny);
+      }
+    }
   }
   dig(1,1);
-}
-function setGoal(){
+
+  px=1; py=1;
   goal={x:W-2,y:H-2};
 }
-  while(maze[y][x]!==0||(x===1&&y===1));
-  goal={x,y};
-}
-function reset(all=true){
-  stopMove();
-  if(all){genMaze();setGoal();}
-  px=1;py=1;draw();
-}
+
 function draw(){
   ctx.clearRect(0,0,cv.width,cv.height);
-  const ox=px-Math.floor(W/2), oy=py-Math.floor(H/2);
-  for(let y=0;y<H;y++)for(let x=0;x<W;x++){
-    const sx=(x-ox)*scale, sy=(y-oy)*scale;
-    if(sx<-scale||sy<-scale||sx>cv.width||sy>cv.height)continue;
-    ctx.fillStyle=maze[y][x]?'#333':'#ddd';
-    ctx.fillRect(sx,sy,scale,scale);
+
+  const ox = px - Math.floor(cv.width/TILE/2);
+  const oy = py - Math.floor(cv.height/TILE/2);
+
+  for(let y=0;y<H;y++){
+    for(let x=0;x<W;x++){
+      const sx=(x-ox)*TILE;
+      const sy=(y-oy)*TILE;
+      if(sx<-TILE||sy<-TILE||sx>cv.width||sy>cv.height)continue;
+      ctx.fillStyle = maze[y][x] ? "#222" : "#eee";
+      ctx.fillRect(sx,sy,TILE,TILE);
+    }
   }
-  ctx.fillStyle='lime';
-  ctx.fillRect((goal.x-ox)*scale,(goal.y-oy)*scale,scale,scale);
-  ctx.fillStyle='red';
+
+  ctx.fillStyle="gold";
+  ctx.fillRect((goal.x-ox)*TILE,(goal.y-oy)*TILE,TILE,TILE);
+
+  ctx.fillStyle="red";
   ctx.beginPath();
-  ctx.arc(cv.width/2+scale/2,cv.height/2+scale/2,scale/3,0,Math.PI*2);
+  ctx.arc(cv.width/2,cv.height/2, TILE/3, 0, Math.PI*2);
   ctx.fill();
-  drawCompass();
 }
-function drawCompass(){
-  const cx=cv.width-50, cy=50;
-  const dx=goal.x-px, dy=goal.y-py;
-  const a=Math.atan2(dy,dx);
-  ctx.save();ctx.translate(cx,cy);ctx.rotate(a);
-  ctx.strokeStyle='yellow';ctx.lineWidth=3;
-  ctx.beginPath();ctx.moveTo(-10,0);ctx.lineTo(10,0);ctx.lineTo(5,-5);
-  ctx.moveTo(10,0);ctx.lineTo(5,5);ctx.stroke();ctx.restore();
-}
+
 function move(dx,dy){
   const nx=px+dx, ny=py+dy;
-  if(maze[ny]&&maze[ny][nx]===0){px=nx;py=ny;
-    if(px===goal.x&&py===goal.y){
-      stopMove();
+  if(maze[ny] && maze[ny][nx]===0){
+    px=nx; py=ny;
+    if(px===goal.x && py===goal.y){
+      document.getElementById("se").currentTime=0;
+      document.getElementById("se").play();
       goalCount++;
-      document.getElementById('goalCount').textContent='GOAL: '+goalCount;
-      goalSE.currentTime=0;goalSE.play();
-      reset(true);
+      document.getElementById("count").textContent=goalCount;
+      stopMove();
+      genMaze(document.getElementById("level").value);
     }
-    draw();}
+    draw();
+  }
 }
+
+function stopMove(){
+  if(timer){clearInterval(timer);timer=null;}
+}
+
 function bind(id,dx,dy){
   const b=document.getElementById(id);
-  b.addEventListener('touchstart',e=>{e.preventDefault();stopMove();move(dx,dy);timer=setInterval(()=>move(dx,dy),120);});
-  b.addEventListener('touchend',stopMove);
-  b.addEventListener('touchcancel',stopMove);
+  b.addEventListener("touchstart",e=>{
+    e.preventDefault();
+    stopMove();
+    move(dx,dy);
+    timer=setInterval(()=>move(dx,dy),120);
+  });
+  b.addEventListener("touchend",stopMove);
+  b.addEventListener("touchcancel",stopMove);
 }
-bind('up',0,-1);bind('down',0,1);bind('left',-1,0);bind('right',1,0);
-draw();};
-document.getElementById('regen').onclick=()=>reset(true);
-reset(true);
+
+bind("up",0,-1);
+bind("down",0,1);
+bind("left",-1,0);
+bind("right",1,0);
+
+document.getElementById("regen").onclick=()=>{
+  stopMove();
+  genMaze(document.getElementById("level").value);
+  draw();
+};
+
+genMaze("normal");
+draw();
 </script>
 </body>
 </html>
