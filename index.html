@@ -10,10 +10,11 @@ body{margin:0;background:#111;color:#fff;font-family:sans-serif;touch-action:non
 canvas{display:block;margin:0 auto;background:#000}
 #ui{padding:8px;display:flex;flex-direction:column;gap:8px}
 #ctrl{display:grid;grid-template-columns:70px 70px 70px;gap:6px;justify-content:center}
-button{font-size:20px;border:none;border-radius:10px;padding:10px}
-#bottom{display:flex;justify-content:center;align-items:center;gap:16px}
-#compass{width:70px;height:70px;border:2px solid #fff;border-radius:50%;position:relative}
-#needle{position:absolute;left:50%;top:50%;width:4px;height:30px;background:red;transform-origin:bottom center}
+button{font-size:18px;border:none;border-radius:10px;padding:10px}
+#bottom{display:flex;justify-content:center;align-items:center;gap:12px;flex-wrap:wrap}
+#compass{width:60px;height:60px;border:2px solid #fff;border-radius:50%;position:relative}
+#needle{position:absolute;left:50%;top:50%;width:4px;height:26px;background:red;transform-origin:bottom center}
+select{font-size:16px;padding:6px;border-radius:6px}
 </style>
 </head>
 <body>
@@ -26,39 +27,79 @@ button{font-size:20px;border:none;border-radius:10px;padding:10px}
   </div>
   <div id="bottom">
     <div id="compass"><div id="needle"></div></div>
+    <select id="difficulty">
+      <option value="easy">かんたん</option>
+      <option value="normal" selected>ふつう</option>
+      <option value="hard">むずかしい</option>
+      <option value="extreme">げきむず</option>
+    </select>
+    <button id="regen">再生成</button>
+    <div id="count">GOAL: 0</div>
   </div>
 </div>
 <script>
 const cv=document.getElementById('cv');
 const ctx=cv.getContext('2d');
-let TILE=32;
-let W,H;
-function resize(){
-  W=Math.floor(innerWidth/TILE);
-  H=Math.floor((innerHeight-240)/TILE);
-  if(W%2===0)W--; if(H%2===0)H--;
-  cv.width=W*TILE; cv.height=H*TILE;
+
+// ===== 状態 =====
+const goalSE=new Audio('goal.mp3'); // 差し替え可
+let goalCount=0;
+let maze=[],W=0,H=0;
+let px=1,py=1,goal={x:1,y:1};
+const TILE=32;
+
+function setSizeByDifficulty(){
+  const d=document.getElementById('difficulty').value;
+  if(d==='easy'){W=31;H=31;}
+  if(d==='normal'){W=61;H=61;}
+  if(d==='hard'){W=101;H=101;}
+  if(d==='extreme'){W=201;H=201;} // C指定
+  cv.width=innerWidth;
+  cv.height=innerHeight-260;
 }
-resize(); addEventListener('resize',resize);
-let maze,px=1,py=1,goal;
+
 function genMaze(){
   maze=Array.from({length:H},()=>Array(W).fill(1));
   function dig(x,y){
     maze[y][x]=0;
-    [[2,0],[-2,0],[0,2],[0,-2]].sort(()=>Math.random()-0.5).forEach(([dx,dy])=>{
+    const dirs=[[2,0],[-2,0],[0,2],[0,-2]].sort(()=>Math.random()-0.5);
+    for(const [dx,dy] of dirs){
       const nx=x+dx, ny=y+dy;
       if(nx>0&&ny>0&&nx<W-1&&ny<H-1&&maze[ny][nx]){
-        maze[y+dy/2][x+dx/2]=0; dig(nx,ny);
+        maze[y+dy/2][x+dx/2]=0;
+        dig(nx,ny);
       }
-    });
+    }
   }
   dig(1,1);
-  goal={x:W-2,y:H-2};
 }
+
+function setGoal(){
+  const d=document.getElementById('difficulty').value;
+  if(d==='extreme'){
+    let x,y;
+    do{
+      x=Math.floor(Math.random()*(W-2))+1;
+      y=Math.floor(Math.random()*(H-2))+1;
+    }while(maze[y][x]!==0||(x===1&&y===1));
+    goal={x,y};
+  }else{
+    goal={x:W-2,y:H-2};
+  }
+}
+
+function reset(){
+  setSizeByDifficulty();
+  genMaze();
+  setGoal();
+  px=1;py=1;
+  draw();
+}
+
 function draw(){
   ctx.clearRect(0,0,cv.width,cv.height);
-  const ox=px-Math.floor(W/2);
-  const oy=py-Math.floor(H/2);
+  const ox=px-Math.floor(cv.width/TILE/2);
+  const oy=py-Math.floor(cv.height/TILE/2);
   for(let y=0;y<H;y++)for(let x=0;x<W;x++){
     const sx=(x-ox)*TILE, sy=(y-oy)*TILE;
     if(sx<-TILE||sy<-TILE||sx>cv.width||sy>cv.height)continue;
@@ -68,22 +109,34 @@ function draw(){
   ctx.fillStyle='gold';
   ctx.fillRect((goal.x-ox)*TILE,(goal.y-oy)*TILE,TILE,TILE);
   ctx.fillStyle='red';
-  ctx.beginPath(); ctx.arc(cv.width/2,cv.height/2,TILE/3,0,Math.PI*2); ctx.fill();
+  ctx.beginPath();ctx.arc(cv.width/2,cv.height/2,TILE/3,0,Math.PI*2);ctx.fill();
   updateCompass();
 }
+
 function updateCompass(){
-  const dx=goal.x-px;
-  const dy=goal.y-py;
+  const dx=goal.x-px, dy=goal.y-py;
   const ang=Math.atan2(dy,dx)+Math.PI/2;
-  document.getElementById('needle').style.transform=`translate(-50%,-100%) rotate(${ang}rad)`;
+  document.getElementById('needle').style.transform=
+    `translate(-50%,-100%) rotate(${ang}rad)`;
 }
+
 function move(dx,dy){
   const nx=px+dx, ny=py+dy;
-  if(maze[ny]&&maze[ny][nx]===0){px=nx;py=ny; draw();}
+  if(maze[ny]&&maze[ny][nx]===0){
+    px=nx;py=ny;
+    if(px===goal.x&&py===goal.y){
+      goalCount++;
+      document.getElementById('count').textContent=`GOAL: ${goalCount}`;
+      goalSE.currentTime=0;goalSE.play();
+      reset();return;
+    }
+    draw();
+  }
 }
+
+const dirs={up:[0,-1],down:[0,1],left:[-1,0],right:[1,0]};
 ['up','down','left','right'].forEach(id=>{
-  const d={up:[0,-1],down:[0,1],left:[-1,0],right:[1,0]}[id];
-  document.getElementById(id).ontouchstart=e=>{e.preventDefault();move(d[0],d[1]);};
+  document.getElementById(id).ontouchstart=e=>{e.preventDefault();move(...dirs[id]);};
 });
 window.addEventListener('keydown',e=>{
   if(e.key==='ArrowUp')move(0,-1);
@@ -91,7 +144,10 @@ window.addEventListener('keydown',e=>{
   if(e.key==='ArrowLeft')move(-1,0);
   if(e.key==='ArrowRight')move(1,0);
 });
-genMaze(); draw();
+
+document.getElementById('regen').onclick=reset;
+
+reset();
 </script>
 </body>
 </html>
