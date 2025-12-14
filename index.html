@@ -23,9 +23,15 @@ button{padding:10px;font-size:16px;border-radius:8px;border:none}
     <button id="left">←</button><button id="down">↓</button><button id="right">→</button>
   </div>
   <div id="opts">
-    <button id="randGoal">ゴールをランダム化</button>
-    <button id="regen">迷路を再生成</button>
-  </div>
+  <select id="difficulty">
+    <option value="easy">かんたん</option>
+    <option value="normal" selected>ふつう</option>
+    <option value="hard">むずかしい</option>
+    <option value="extreme">げきむず</option>
+  </select>
+  <button id="regen">迷路を再生成</button>
+  <span id="goalCount">GOAL: 0</span>
+</div>
 </div>
 <script>
 const cv=document.getElementById('cv');
@@ -38,28 +44,38 @@ function resize(){
   cv.width=W*scale;cv.height=H*scale;
 }
 resize();addEventListener('resize',resize);
-let maze,px,py,goal,compass={x:0,y:0};
+let maze,px,py,goal;
+let goalCount=0;
+const goalSE=new Audio('goal.mp3');
 let timer=null;
 function stopMove(){if(timer){clearInterval(timer);timer=null;}}
 function genMaze(){
+  const diff=document.getElementById('difficulty').value;
+  let complexity=1;
+  if(diff==='normal')complexity=2;
+  if(diff==='hard')complexity=4;
+  if(diff==='extreme')complexity=8;
+
   maze=Array.from({length:H},()=>Array(W).fill(1));
-  function dig(x,y){maze[y][x]=0;const d=[[2,0],[-2,0],[0,2],[0,-2]].sort(()=>Math.random()-0.5);
-    for(const [dx,dy] of d){const nx=x+dx,ny=y+dy;
+  function dig(x,y){maze[y][x]=0;
+    const dirs=[[2,0],[-2,0],[0,2],[0,-2]];
+    for(let i=0;i<complexity;i++)dirs.sort(()=>Math.random()-0.5);
+    for(const [dx,dy] of dirs){const nx=x+dx,ny=y+dy;
       if(ny>0&&ny<H-1&&nx>0&&nx<W-1&&maze[ny][nx]){
         maze[y+dy/2][x+dx/2]=0;dig(nx,ny);
       }}
   }
   dig(1,1);
 }
-function randGoal(){
-  let x,y;
-  do{ x=Math.floor(Math.random()*(W-2))+1; y=Math.floor(Math.random()*(H-2))+1; }
+function setGoal(){
+  goal={x:W-2,y:H-2};
+}
   while(maze[y][x]!==0||(x===1&&y===1));
   goal={x,y};
 }
 function reset(all=true){
   stopMove();
-  if(all){genMaze();randGoal();}
+  if(all){genMaze();setGoal();}
   px=1;py=1;draw();
 }
 function draw(){
@@ -91,7 +107,14 @@ function drawCompass(){
 function move(dx,dy){
   const nx=px+dx, ny=py+dy;
   if(maze[ny]&&maze[ny][nx]===0){px=nx;py=ny;
-    if(px===goal.x&&py===goal.y){stopMove();alert('GOAL!');reset(false);} draw();}
+    if(px===goal.x&&py===goal.y){
+      stopMove();
+      goalCount++;
+      document.getElementById('goalCount').textContent='GOAL: '+goalCount;
+      goalSE.currentTime=0;goalSE.play();
+      reset(true);
+    }
+    draw();}
 }
 function bind(id,dx,dy){
   const b=document.getElementById(id);
@@ -100,7 +123,7 @@ function bind(id,dx,dy){
   b.addEventListener('touchcancel',stopMove);
 }
 bind('up',0,-1);bind('down',0,1);bind('left',-1,0);bind('right',1,0);
-document.getElementById('randGoal').onclick=()=>{randGoal();draw();};
+draw();};
 document.getElementById('regen').onclick=()=>reset(true);
 reset(true);
 </script>
