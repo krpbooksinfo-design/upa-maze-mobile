@@ -10,7 +10,7 @@ body{margin:0;background:#111;color:#fff;font-family:sans-serif;touch-action:non
 canvas{display:block;margin:0 auto;background:#000}
 #ui{padding:8px;display:flex;flex-direction:column;gap:8px}
 #ctrl{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}
-button{padding:12px;font-size:16px;border-radius:8px;border:none}
+button,select{padding:12px;font-size:16px;border-radius:8px;border:none}
 #opts{display:flex;gap:6px;flex-wrap:wrap}
 #info{display:flex;justify-content:space-between;font-size:14px}
 </style>
@@ -44,39 +44,34 @@ button{padding:12px;font-size:16px;border-radius:8px;border:none}
 <audio id="se" src="goal.mp3" preload="auto"></audio>
 
 <script>
-const cv = document.getElementById("cv");
-const ctx = cv.getContext("2d");
+const cv=document.getElementById("cv");
+const ctx=cv.getContext("2d");
 
-let TILE = 32;
-let maze=[], W=0, H=0;
-let px=1, py=1;
+let TILE=32;
+let maze=[],W=0,H=0;
+let px=1,py=1;
 let goal={x:0,y:0};
 let timer=null;
 let goalCount=0;
 
 function resize(){
-  const hUI = document.getElementById("ui").offsetHeight + document.getElementById("title").offsetHeight;
-  cv.width = window.innerWidth;
-  cv.height = window.innerHeight - hUI;
+  const hUI=document.getElementById("ui").offsetHeight+document.getElementById("title").offsetHeight;
+  cv.width=innerWidth;
+  cv.height=innerHeight-hUI;
 }
-window.addEventListener("resize", resize);
+addEventListener("resize",resize);
 resize();
 
 function genMaze(level){
-  const sizeMap = {
-    easy: 21,
-    normal: 31,
-    hard: 41,
-    extreme: 61
-  };
-  W = H = sizeMap[level];
-  maze = Array.from({length:H},()=>Array(W).fill(1));
+  const sizeMap={easy:21,normal:31,hard:41,extreme:61};
+  W=H=sizeMap[level];
+  maze=Array.from({length:H},()=>Array(W).fill(1));
 
   function dig(x,y){
     maze[y][x]=0;
     const d=[[2,0],[-2,0],[0,2],[0,-2]].sort(()=>Math.random()-0.5);
     for(const [dx,dy] of d){
-      const nx=x+dx, ny=y+dy;
+      const nx=x+dx,ny=y+dy;
       if(nx>0&&ny>0&&nx<W-1&&ny<H-1&&maze[ny][nx]){
         maze[y+dy/2][x+dx/2]=0;
         dig(nx,ny);
@@ -85,24 +80,34 @@ function genMaze(level){
   }
   dig(1,1);
 
-  px=1; py=1;
-  goal={x:W-2,y:H-2};
+  px=1;py=1;
+
+  if(level==="extreme"){
+    let gx,gy;
+    do{
+      gx=Math.floor(Math.random()*(W-2))+1;
+      gy=Math.floor(Math.random()*(H-2))+1;
+    }while(maze[gy][gx]!==0||(gx===1&&gy===1));
+    goal={x:gx,y:gy};
+  }else{
+    goal={x:W-2,y:H-2};
+  }
 }
 
 function draw(){
   ctx.clearRect(0,0,cv.width,cv.height);
 
-  const ox = px - Math.floor(cv.width/TILE/2);
-  const oy = py - Math.floor(cv.height/TILE/2);
+  const cx=Math.floor(cv.width/TILE/2);
+  const cy=Math.floor(cv.height/TILE/2);
+  const ox=px-cx;
+  const oy=py-cy;
 
-  for(let y=0;y<H;y++){
-    for(let x=0;x<W;x++){
-      const sx=(x-ox)*TILE;
-      const sy=(y-oy)*TILE;
-      if(sx<-TILE||sy<-TILE||sx>cv.width||sy>cv.height)continue;
-      ctx.fillStyle = maze[y][x] ? "#222" : "#eee";
-      ctx.fillRect(sx,sy,TILE,TILE);
-    }
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++){
+    const sx=(x-ox)*TILE;
+    const sy=(y-oy)*TILE;
+    if(sx<-TILE||sy<-TILE||sx>cv.width||sy>cv.height)continue;
+    ctx.fillStyle=maze[y][x]?"#222":"#eee";
+    ctx.fillRect(sx,sy,TILE,TILE);
   }
 
   ctx.fillStyle="gold";
@@ -110,15 +115,37 @@ function draw(){
 
   ctx.fillStyle="red";
   ctx.beginPath();
-  ctx.arc(cv.width/2,cv.height/2, TILE/3, 0, Math.PI*2);
+  ctx.arc(cx*TILE+TILE/2,cy*TILE+TILE/2,TILE/3,0,Math.PI*2);
   ctx.fill();
+
+  drawCompass(cx*TILE+TILE/2,cy*TILE+TILE/2);
+}
+
+function drawCompass(pxScr,pyScr){
+  const dx=goal.x-px;
+  const dy=goal.y-py;
+  const ang=Math.atan2(dy,dx);
+
+  ctx.save();
+  ctx.translate(pxScr,pyScr);
+  ctx.rotate(ang);
+  ctx.strokeStyle="yellow";
+  ctx.lineWidth=3;
+  ctx.beginPath();
+  ctx.moveTo(0,-20);
+  ctx.lineTo(0,20);
+  ctx.lineTo(-6,12);
+  ctx.moveTo(0,20);
+  ctx.lineTo(6,12);
+  ctx.stroke();
+  ctx.restore();
 }
 
 function move(dx,dy){
-  const nx=px+dx, ny=py+dy;
-  if(maze[ny] && maze[ny][nx]===0){
-    px=nx; py=ny;
-    if(px===goal.x && py===goal.y){
+  const nx=px+dx,ny=py+dy;
+  if(maze[ny]&&maze[ny][nx]===0){
+    px=nx;py=ny;
+    if(px===goal.x&&py===goal.y){
       document.getElementById("se").currentTime=0;
       document.getElementById("se").play();
       goalCount++;
@@ -130,18 +157,11 @@ function move(dx,dy){
   }
 }
 
-function stopMove(){
-  if(timer){clearInterval(timer);timer=null;}
-}
+function stopMove(){if(timer){clearInterval(timer);timer=null;}}
 
 function bind(id,dx,dy){
   const b=document.getElementById(id);
-  b.addEventListener("touchstart",e=>{
-    e.preventDefault();
-    stopMove();
-    move(dx,dy);
-    timer=setInterval(()=>move(dx,dy),120);
-  });
+  b.addEventListener("touchstart",e=>{e.preventDefault();stopMove();move(dx,dy);timer=setInterval(()=>move(dx,dy),120);});
   b.addEventListener("touchend",stopMove);
   b.addEventListener("touchcancel",stopMove);
 }
@@ -151,11 +171,7 @@ bind("down",0,1);
 bind("left",-1,0);
 bind("right",1,0);
 
-document.getElementById("regen").onclick=()=>{
-  stopMove();
-  genMaze(document.getElementById("level").value);
-  draw();
-};
+document.getElementById("regen").onclick=()=>{stopMove();genMaze(document.getElementById("level").value);draw();};
 
 genMaze("normal");
 draw();
